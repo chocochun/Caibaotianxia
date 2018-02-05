@@ -1,0 +1,10 @@
+name: stock
+title: stock
+account: financemj
+server: shinyapps.io
+appId: 240300
+bundleId: 1098795
+url: https://financemj.shinyapps.io/stock/
+when: 1511788054.77555
+asMultiple: FALSE
+asStatic: FALSE

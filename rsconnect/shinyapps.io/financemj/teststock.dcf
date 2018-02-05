@@ -1,0 +1,10 @@
+name: teststock
+title: teststock
+account: financemj
+server: shinyapps.io
+appId: 253060
+bundleId: 1158854
+url: https://financemj.shinyapps.io/teststock/
+when: 1514903402.73805
+asMultiple: FALSE
+asStatic: FALSE

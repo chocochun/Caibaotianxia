@@ -1,0 +1,10 @@
+name: financemj_morningstar2
+title: financemj_morningstar
+account: minchunstock
+server: shinyapps.io
+appId: 240279
+bundleId: 1110902
+url: https://minchunstock.shinyapps.io/financemj_morningstar2/
+when: 1512241505.26308
+asMultiple: FALSE
+asStatic: FALSE

@@ -1,0 +1,146 @@
+---
+output: html_document
+---
+
+### `r paste0('财报天下——',input$market, ':', input$stockname)`
+
+```{r setup, include=FALSE}
+# author: "财报天下 www.caibaotianxia.com"
+# date: "`r format(Sys.time(), '%d %B, %Y')`"
+# title: "`r paste0('财报天下——',input$market, ':', input$stockname)`"
+# `r paste0('财报天下——',input$market, ':', values$stockinformation$V1[1])`
+#source("global.R")
+knitr::opts_chunk$set(echo = FALSE)
+library(kableExtra)
+library("ggplot2")
+library("stringr")
+library(plyr)
+library(knitr)
+library(xtable)
+require(stringr)
+require(rvest)
+require(rjson)
+library(shiny)
+library(shinythemes)
+library(googlesheets)
+
+#options(knitr.table.format = "html")
+# function convert data to colname
+
+# font size
+fsize = 7
+
+```
+
+##### 资产负债比率 
+
+```{r cars,  warning = FALSE, echo = FALSE, results = 'asis', message=FALSE}
+
+stockname <- paste0(market_note(input$market),as.character(input$stockname))
+
+#stockname <- "AMZN"
+
+balance <- paste0("http://financials.morningstar.com/ajax/ReportProcess4CSV.html?t=",stockname,"&reportType=bs&period=12&dataType=A&order=asc&columnYear=5&number=3") %>% 
+      read.csv(skip=1)
+
+balance <- trans_fina(balance)
+    
+    #balance <- stockpage()[[1]]
+    
+      zichan_table <- matrix( "-" ,11 ,nrow(balance))
+      
+      rownames(zichan_table) <- c("现金与约当现金","短期投资","应收账款", "存货", 
+                                  "流动资产", "总资产",  "应付账款", 
+                                  "流动负债", "长期负债", "股东权益", "总负债+股东权益")
+    
+    colnames(zichan_table) <- substr(rownames(balance), 2,5)
+    
+    
+    for (i in 1:nrow(balance)){
+      zichan_table[,i] <- get_zichan(balance,i )
+    }
+#   zichan_table <- cbind( c(rownames(zichan_table)) ,zichan_table )
+#colnames(zichan_table)[1] <- "资产负债比率(%)"
+#kable(zichan_table) %>%  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = TRUE,font_size = fsize)
+#zichan_table <- as.data.frame(zichan_table)
+#kable(zichan_table) 
+
+print(xtable(zichan_table,align  = "l|ccccc"), type="html")
+```
+
+
+##### 财务比率分析 
+
+```{r pressure, warning = FALSE, echo=FALSE, results = 'asis'}
+
+    keyratio <- paste0("http://financials.morningstar.com/ajax/exportKR2CSV.html?t=", stockname) %>% 
+      read.csv(skip = 2)
+    
+    keyratio <- keyratio[, c(1, 7:11) ]
+    
+    
+    fin_table <- matrix( "-" ,20 ,ncol(keyratio))
+    
+    colnames(fin_table) <- c("财务比率",substr(colnames(keyratio)[2:(ncol(keyratio))], 2,5) )
+    
+    rownames(fin_table)<- c("财务结构", "","偿债能力","",
+                             "经营能力","","","","","",
+                            "获利能力","","","","","","",
+                            "现金流量","","")
+    
+    fin_table[,1] <- c("负债占资产比率(%) = 资产负债率",
+                       "长期资金占不动产/厂房及设备比率(%) = 长期资产适合率",
+                       "流动比率(%)","速动比率(%)",
+                       "应收款项周转率(次)","平均收现日数",
+                       "存货周转率(次)","平均销货日数(平均在库天数)",
+                       "不动产/厂房及设备周转率(次) = 固定资产周转率",
+                       "总资产周转率(次)",
+                       "资产报酬率(%) RoA = 总资产收益率",
+                       "权益报酬率(%) RoE = 净资产收益率",
+                       "税前纯益占实收资本比率(%)","营业毛利率(%)",
+                       "营业利益率(%)","纯益率(%) = 净利率",
+                       "每股盈余(元) = 每股收益",
+                       "现金流量比率(%)","现金流量允当比率(%)","现金再投资比率(%)")
+    
+    
+    #balance <- stockpage()
+    
+    for (i in 1: (ncol(keyratio) - 1) ){
+      fin_table[,i+1] <- get_finance(keyratio, balance ,i )
+    }
+#fin_table <- cbind( c(rownames(fin_table)) ,fin_table )
+#colnames(fin_table)[1] <- "财务比率分析"
+#kable(fin_table) %>%  kable_styling(bootstrap_options = c("condensed"), full_width = T,font_size = fsize)
+fin_table <- as.data.frame(fin_table)
+print(xtable(fin_table, rownames=FALSE,align  = "ll|ccccc"), type="html")
+
+```
+
+##### 现金流量状况 (单位：百万元) 
+
+```{r cash, warning = FALSE, echo=FALSE, results = 'asis'}
+   cash <- paste0("http://financials.morningstar.com/ajax/ReportProcess4CSV.html?t=",stockname,"&reportType=cf&period=12&dataType=A&order=asc&columnYear=5&number=3") %>%
+      read.csv(skip=1)
+    
+    cash <- trans_fina(cash)
+
+    
+    cash_table <- matrix( "-" ,4 , nrow(cash)-1)
+    
+    colnames(cash_table) <- substr(rownames(cash)[1:(nrow(cash)-1)], 2,5)
+    
+    rownames(cash_table) <- c("营业活动现金流量(来自损益表)",
+                              "投资活动现金流量(来自资产负债表左边)",
+                              "理财活动现金流量(来自资产负债表右边)",
+                              "自由现金流量")
+    
+    
+    for (i in 1: (nrow(cash)-1) ){
+      cash_table[,i] <- get_cash(cash, i  )
+    }
+#kable(cash_table) %>%  kable_styling(bootstrap_options = c( "hover", "condensed"), full_width = T,font_size = fsize)
+    
+print(xtable(cash_table,align  = "l|ccccc"), type="html")
+
+```
+www.CaiBaoTianXia.com

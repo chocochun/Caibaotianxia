@@ -1,0 +1,10 @@
+name: usstock4
+title: usstock
+account: financemj
+server: shinyapps.io
+appId: 240295
+bundleId: 1097617
+url: https://financemj.shinyapps.io/usstock4/
+when: 1511735551.26719
+asMultiple: FALSE
+asStatic: FALSE

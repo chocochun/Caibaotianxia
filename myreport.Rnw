@@ -1,0 +1,332 @@
+\documentclass[twocolumn, 10pt,a4paper]{article}
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage[table]{xcolor}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \usepackage{colortbl}
+ \usepackage{pdflscape}
+ \usepackage{tabu}
+ \usepackage{threeparttable}
+ \usepackage{ctex}
+ \usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+ 
+\usepackage{multicol}
+\usepackage[margin={1cm,2cm}]{geometry}
+\setlength{\columnsep}{3cm}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\chead{财报天下 www.caibaotianxia.com}
+\pagenumbering{gobble}
+\begin{document}
+
+\begin{landscape}
+
+<<names, results='asis', echo=FALSE, message=FALSE>>=
+library(kableExtra)
+library("ggplot2")
+library("stringr")
+library(plyr)
+library(knitr)
+library(xtable)
+require(stringr)
+require(rvest)
+require(rjson)
+library(shiny)
+library(shinythemes)
+library(googlesheets)
+
+options(knitr.table.format = "latex")
+# function convert data to colname
+
+trans_fina <- function(x){
+  cbal <- as.character(x[,1])
+  
+  x <- as.data.frame(t(x[,-1]))
+  #x <- x[-1,]
+  
+  colnames(x) <- cbal
+  x
+}
+
+
+####### stock example
+
+
+remove_comma <- function(k){
+  as.numeric(sub(",", "", k, fixed = TRUE))
+} 
+
+ifnull <- function(x) ifelse(is.null(x), NA, x)
+
+get_zichan <- function(x, therow) {
+  
+  dat <- x[therow,] 
+  
+  cash_and_eq <- dat$`Cash and cash equivalents` %>% ifnull
+  
+  account_receivable <- dat$Receivables %>% ifnull
+  
+  current_asset <- dat$`Total current assets` %>% ifnull
+  
+  total_asset <- dat$`Total assets` %>% ifnull
+  
+  inventories <- dat$Inventories %>% ifnull
+  
+  account_payable <- dat$`Accounts payable` %>% ifnull
+  
+  current_liabilities <- dat$`Total current liabilities` %>% ifnull
+  
+  total_liabilities <- dat$`Total liabilities` %>% ifnull
+  
+  longterm_liabilities <- total_liabilities - current_liabilities %>% ifnull
+  
+  total_equity <- dat$`Total stockholders' equity` %>% ifnull
+  
+  round(c(cash_and_eq,account_receivable,inventories,current_asset,total_asset,
+                   account_payable,current_liabilities,longterm_liabilities,total_equity,
+                   total_liabilities+total_equity)/total_asset*100,digit=1)
+  
+}
+
+get_cash <- function(x, therow) {
+  
+  dat <- x[therow,] 
+  
+  cash_operation <- dat$`Net cash provided by operating activities` %>% ifnull
+  
+  cash_invest <- dat$`Net cash used for investing activities` %>% ifnull
+  
+  cash_finance <- dat$`Net cash provided by (used for) financing activities` %>% ifnull
+  
+  cash_free <-  dat$`Free cash flow` %>% ifnull
+  
+  c(cash_operation,cash_invest,cash_finance ,cash_free)
+}
+
+get_finance <- function(keyratio, balance, therow) {
+  
+  dat <- keyratio[,c(1,therow+1)] 
+  #dat[,2] <- as.numeric(as.character( dat[,2] ))
+  zichan <- balance[therow,] 
+  
+  # deb_percent
+  total_liabilities <- zichan$`Total liabilities`  %>% ifnull
+  current_liabilities <- zichan$`Total current liabilities`  %>% ifnull
+  total_asset <- zichan$`Total assets`  %>% ifnull
+  
+  deb_percent <- total_liabilities/total_asset * 100  %>% ifnull
+  
+  # 长期资金/固定资产
+  total_equity <- zichan$`Total stockholders' equity`  %>% ifnull
+  longterm_liabilities <- total_liabilities - current_liabilities  %>% ifnull
+  net_property <- zichan$`Property and equipment, at cost`  %>% ifnull
+  longterm_percent <- (total_equity + longterm_liabilities)/net_property  %>% ifnull
+  
+  # (所有着权益合计+非流动负债合计)/(固定资产+在建工程+工程物资)
+  
+  # 流动比率
+  #current_asset <- zichan$`Total current assets`
+  #current_liabilities <- zichan$`Total current liabilities`
+  #current_percent <- current_asset /current_liabilities*100
+  
+  current_percent <- (dat[88,2] %>% as.character() %>% as.numeric()) *100  %>% ifnull
+  
+  # 速动比率 = 流动资产-存货 - (预付费用) 
+  ####### 需要寻找预付费用！！！！
+  #inventories <- zichan$Inventories
+  #speed_percent <- (current_asset - inventories) /current_liabilities*100
+  speed_percent <- (dat[89,2] %>% as.character() %>% as.numeric()) *100  %>% ifnull
+  
+  # 应收款周转率
+  receivable_turnover <- (dat[98,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 平均收现日数
+  days_cash <- 360/receivable_turnover  %>% ifnull
+  
+  #cost_sale <- dat$`Cost of revenue`
+  
+  # 存货周转率
+  inventory_turnover <-(dat[99,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  days_inventory <- 360/inventory_turnover  %>% ifnull
+  
+  
+  # 固定资产周转率
+  # revenue <- dat$Revenue
+  property_turnover <- (dat[100,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 总资产周转率
+  asset_turnover <- (dat[101,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 资产报酬率
+  # 净利润/平均资产总额
+  
+  ROA <- (dat[31,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 权益报酬率
+  ROE <- (dat[33,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 税前纯益占实收资本比率
+  pretax_percent <- NA
+  
+  # 营业毛利率
+  #gross_profit <- get_rownumber(x, 55, thecol)
+  gross_percent <- (dat[2,2] %>% as.character() %>% as.numeric())  %>% ifnull
+  
+  # 营业利益率
+  #operate_profit <- get_rownumber(x, 62, thecol)
+  operate_percent <- (dat[4,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # 净利率
+  #net_profit <- get_rownumber(x, 75, thecol)
+  net_percent <- (dat[29,2] %>% as.character() %>% as.numeric())   %>% ifnull
+  
+  # eps
+  eps <- (dat[6,2] %>% as.character() %>% as.numeric())  %>% ifnull
+  
+  # 现金流量比率
+  OCF <- as.numeric(gsub(",", "",dat[11,2])) %>% ifnull
+  cash_current_percent <- OCF/current_liabilities*100 %>% ifnull
+  
+  # 现金流量允当比率
+  cash_current_yundang <- NA
+  
+  # 现金再投资比率
+  cash_invest <-  NA
+  
+  c(deb_percent,longterm_percent,current_percent,speed_percent,receivable_turnover,
+    days_cash,inventory_turnover, days_inventory, property_turnover,asset_turnover,
+    ROA,ROE,pretax_percent,gross_percent,operate_percent,net_percent,eps,
+    cash_current_percent,cash_current_yundang, cash_invest
+    ) %>% round(.,1)
+  
+}
+
+stockname <- "AMZN"
+#stockname <- paste0(market_note(input$market),as.character(input$stockname))
+
+balance <- paste0("http://financials.morningstar.com/ajax/ReportProcess4CSV.html?t=",stockname,"&reportType=bs&period=12&dataType=A&order=asc&columnYear=5&number=3") %>% 
+      read.csv(skip=1)
+
+balance <- trans_fina(balance)
+    
+    #balance <- stockpage()[[1]]
+    
+    zichan_table <- matrix( "-" ,10 ,nrow(balance))
+    
+    rownames(zichan_table) <- c("现金与约当现金","应收账款", "存货", 
+                                "流动资产", "总资产",  "应付账款", 
+                                "流动负债", "长期负债", "股东权益", "总负债+股东权益")
+    
+    colnames(zichan_table) <- substr(rownames(balance), 2,5)
+    
+    
+    for (i in 1:nrow(balance)){
+      zichan_table[,i] <- get_zichan(balance,i )
+    }
+   zichan_table <- cbind( c(rownames(zichan_table)) ,zichan_table )
+colnames(zichan_table)[1] <- "资产负债比率(%)"
+
+@
+<<finan, results='asis', echo=FALSE, message=FALSE>>=
+
+    keyratio <- paste0("http://financials.morningstar.com/ajax/exportKR2CSV.html?t=", stockname) %>% 
+      read.csv(skip = 2)
+    
+    keyratio <- keyratio[, c(1, 7:11) ]
+    
+    
+    fin_table <- matrix( "-" ,20 ,ncol(keyratio))
+    
+    colnames(fin_table) <- c("财务比率",substr(colnames(keyratio)[2:(ncol(keyratio))], 2,5) )
+    
+    rownames(fin_table)<- c("财务结构", "","偿债能力","",
+                             "经营能力","","","","","",
+                            "获利能力","","","","","","",
+                            "现金流量","","")
+    
+    fin_table[,1] <- c("负债占资产比率(%) = 资产负债率",
+                       "长期资金占不动产/厂房及设备比率(%) = 长期资产适合率",
+                       "流动比率(%)","速动比率(%)",
+                       "应收款项周转率(次)","平均收现日数",
+                       "存货周转率(次)","平均销货日数(平均在库天数)",
+                       "不动产/厂房及设备周转率(次) = 固定资产周转率",
+                       "总资产周转率(次)",
+                       "资产报酬率(%) RoA = 总资产收益率",
+                       "权益报酬率(%) RoE = 净资产收益率",
+                       "税前纯益占实收资本比率(%)","营业毛利率(%)",
+                       "营业利益率(%)","纯益率(%) = 净利率",
+                       "每股盈余(元) = 每股收益",
+                       "现金流量比率(%)","现金流量允当比率(%)","现金再投资比率(%)")
+    
+    
+    #balance <- stockpage()
+    
+    for (i in 1: (ncol(keyratio) - 1) ){
+      fin_table[,i+1] <- get_finance(keyratio, balance ,i )
+    }
+fin_table <- cbind( c(rownames(fin_table)) ,fin_table )
+colnames(fin_table)[1] <- "财务比率分析"
+    
+@
+<<cash, results='asis', echo=FALSE, message=FALSE>>=
+    cash <- paste0("http://financials.morningstar.com/ajax/ReportProcess4CSV.html?t=",stockname,"&reportType=cf&period=12&dataType=A&order=asc&columnYear=5&number=3") %>%
+      read.csv(skip=1)
+    
+    cash <- trans_fina(cash)
+
+    
+    cash_table <- matrix( "-" ,4 , nrow(cash)-1)
+    
+    colnames(cash_table) <- substr(rownames(cash)[1:(nrow(cash)-1)], 2,5)
+    
+    rownames(cash_table) <- c("营业活动现金流量(来自损益表)",
+                              "投资活动现金流量(来自资产负债表左边)",
+                              "理财活动现金流量(来自资产负债表右边)",
+                              "自由现金流量")
+    
+    
+    for (i in 1: (nrow(cash)-1) ){
+      cash_table[,i] <- get_cash(cash, i  )
+    }
+
+cash_table <- cbind( c(rownames(cash_table)) ,cash_table )
+colnames(cash_table)[1] <- "现金流量状况(单位：百万元)"
+
+#input <- list()
+#input$market <- "美国"
+#input$stockname <- "AMZN"
+
+@
+
+\Sexpr{input$market}: \Sexpr{input$stockname}
+
+\begin{multicols}{3}
+
+<<2, results='asis', echo=FALSE, message=FALSE>>=
+kable(zichan_table, row.names = FALSE)
+@
+
+\columnbreak
+
+
+<<3, results='asis', echo=FALSE, message=FALSE, >>=
+kable(cash_table, row.names = FALSE) 
+@
+
+\columnbreak
+
+\end{multicols}
+
+<<1, results='asis', echo=FALSE, message=FALSE>>=
+kable(fin_table,row.names = FALSE)
+@
+
+
+
+\end{landscape}
+
+\end{document}
